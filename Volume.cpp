@@ -19,6 +19,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -337,6 +338,34 @@ int Volume::mountVol() {
             SLOGE("%s failed FS checks (%s)", devicePath, strerror(errno));
             setState(Volume::State_Idle);
             return -1;
+        }
+
+        if (access(getMountpoint(), F_OK)) {
+            char *myMountpoint = strdup(getMountpoint());
+            if (!myMountpoint) {
+                SLOGE("Allocation failure while mounting %s", devicePath);
+                return -1;
+            }
+            if (*myMountpoint) {
+                if (mDebug) SLOGD("Mount point prepare for \"%s\"", myMountpoint);
+                char *slash = myMountpoint;
+                while (slash) {
+                    slash = strchr(slash + 1, '/');
+                    if (slash)
+                        *slash = 0;
+                    if (mDebug) SLOGD("Check existence of %s", myMountpoint);
+                    if (access(myMountpoint, F_OK)) {
+                        if (mDebug) SLOGD("Create %s", myMountpoint);
+                        if (mkdir(myMountpoint, 0555)) {
+                            SLOGE("Failed to create %s", myMountpoint);
+                            return -1;
+                        }
+                    }
+                    if (slash)
+                        *slash = '/';
+                }
+            }
+            free (myMountpoint);
         }
 
         /*
